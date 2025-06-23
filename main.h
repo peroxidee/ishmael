@@ -87,7 +87,7 @@ typedef NTSTATUS(NTAPI *NtAllocateVirtualMemory)(
 );
 
 
-typedef NTSTATUS(NTAPI *NtSetContextThread)(
+typedef NTSTATUS(NTAPI *NtGetContextThread)(
     _In_ HANDLE ThreadHandle,
     _Inout_ PCONTEXT ThreadContext
 );
@@ -97,7 +97,23 @@ typedef NTSTATUS(NTAPI *NtResumeThread)(
     _Out_opt_ PULONG PreviousSuspendCount
 );
 
+typedef NTSTATUS(NTAPI *NtCreateFile)(
 
+
+    _Out_ PHANDLE FileHandle,
+    _In_ ACCESS_MASK DesiredAccess,
+    _In_ PCOBJECT_ATTRIBUTES ObjectAttributes,
+    _Out_ PIO_STATUS_BLOCK IoStatusBlock,
+    _In_opt_ PLARGE_INTEGER AllocationSize,
+    _In_ ULONG FileAttributes,
+    _In_ ULONG ShareAccess,
+    _In_ ULONG CreateDisposition,
+    _In_ ULONG CreateOptions,
+    _In_reads_bytes_opt_(EaLength) PVOID EaBuffer,
+    _In_ ULONG EaLength
+
+
+);
 typedef NTSTATUS(NTAPI *NtOpenProcess)(
 _Out_ PHANDLE ProcessHandle,
 _In_ ACCESS_MASK DesiredAccess,
