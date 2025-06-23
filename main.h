@@ -38,6 +38,10 @@ typedef struct _UNICODE_STRING
     _Field_size_bytes_part_opt_(MaximumLength, Length) PWCH Buffer;
 } UNICODE_STRING, *PUNICODE_STRING;
 
+typedef const OBJECT_ATTRIBUTES *PCOBJECT_ATTRIBUTES;
+
+typedef DWORD ACCESS_MASK;
+typedef ACCESS_MASK* PACCESS_MASK;
 
 typedef struct _CLIENT_ID
 {
@@ -57,6 +61,15 @@ typedef struct _OBJECT_ATTRIBUTES
 
 //define the different functions
 
+
+typedef NTSTATUS(NTAPI *NtGetNextProcess)(
+_In_opt_ HANDLE ProcessHandle,
+_In_ ACCESS_MASK DesiredAccess,
+_In_ ULONG HandleAttributes,
+_In_ ULONG Flags,
+_Out_ PHANDLE NewProcessHandle
+
+);
 
 typedef NTSTATUS(NTAPI *NtCreateProcess)(
 
@@ -97,6 +110,25 @@ typedef NTSTATUS(NTAPI *NtResumeThread)(
     _Out_opt_ PULONG PreviousSuspendCount
 );
 
+
+typedef NTSTATUS (NTAPI *NtReadFile)(
+
+_In_ HANDLE FileHandle,
+ _In_opt_ HANDLE Event,
+ _In_opt_ PIO_APC_ROUTINE ApcRoutine,
+ _In_opt_ PVOID ApcContext,
+ _Out_ PIO_STATUS_BLOCK IoStatusBlock,
+ _Out_writes_bytes_(Length) PVOID Buffer,
+ _In_ ULONG Length,
+ _In_opt_ PLARGE_INTEGER ByteOffset,
+ _In_opt_ PULONG Key
+);
+
+typedef NTSTATUS(NTAPI * NtAllocateLocallyUniqueId)(
+
+    _Out_ PLUID Luid
+
+    );
 typedef NTSTATUS(NTAPI *NtCreateFile)(
 
 
