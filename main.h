@@ -31,6 +31,133 @@ typedef NTSTATUS (NTAPI *PUSER_THREAD_START_ROUTINE)(
     _In_ PVOID ThreadParameter
     );
 
+typedef struct _PS_CREATE_INFO
+{
+    SIZE_T Size;
+    PS_CREATE_STATE State;
+    union
+    {
+        // PsCreateInitialState
+        struct
+        {
+            union
+            {
+                ULONG InitFlags;
+                struct
+                {
+                    UCHAR WriteOutputOnExit : 1;
+                    UCHAR DetectManifest : 1;
+                    UCHAR IFEOSkipDebugger : 1;
+                    UCHAR IFEODoNotPropagateKeyState : 1;
+                    UCHAR SpareBits1 : 4;
+                    UCHAR SpareBits2 : 8;
+                    USHORT ProhibitedImageCharacteristics : 16;
+                };
+            };
+            ACCESS_MASK AdditionalFileAccess;
+        } InitState;
+
+        // PsCreateFailOnSectionCreate
+        struct
+        {
+            HANDLE FileHandle;
+        } FailSection;
+
+        // PsCreateFailExeFormat
+        struct
+        {
+            USHORT DllCharacteristics;
+        } ExeFormat;
+
+        // PsCreateFailExeName
+        struct
+        {
+            HANDLE IFEOKey;
+        } ExeName;
+
+        // PsCreateSuccess
+        struct
+        {
+            union
+            {
+                ULONG OutputFlags;
+                struct
+                {
+                    UCHAR ProtectedProcess : 1;
+                    UCHAR AddressSpaceOverride : 1;
+                    UCHAR DevOverrideEnabled : 1; // from Image File Execution Options
+                    UCHAR ManifestDetected : 1;
+                    UCHAR ProtectedProcessLight : 1;
+                    UCHAR SpareBits1 : 3;
+                    UCHAR SpareBits2 : 8;
+                    USHORT SpareBits3 : 16;
+                };
+            };
+            HANDLE FileHandle;
+            HANDLE SectionHandle;
+            ULONGLONG UserProcessParametersNative;
+            ULONG UserProcessParametersWow64;
+            ULONG CurrentParameterFlags;
+            ULONGLONG PebAddressNative;
+            ULONG PebAddressWow64;
+            ULONGLONG ManifestAddress;
+            ULONG ManifestSize;
+        } SuccessState;
+    };
+} PS_CREATE_INFO, *PPS_CREATE_INFO;
+
+
+typedef struct _RTL_USER_PROCESS_PARAMETERS
+{
+    ULONG MaximumLength;
+    ULONG Length;
+
+    ULONG Flags;
+    ULONG DebugFlags;
+
+    HANDLE ConsoleHandle;
+    ULONG ConsoleFlags;
+    HANDLE StandardInput;
+    HANDLE StandardOutput;
+    HANDLE StandardError;
+
+    CURDIR CurrentDirectory;
+    UNICODE_STRING DllPath;
+    UNICODE_STRING ImagePathName;
+    UNICODE_STRING CommandLine;
+    PVOID Environment;
+
+    ULONG StartingX;
+    ULONG StartingY;
+    ULONG CountX;
+    ULONG CountY;
+    ULONG CountCharsX;
+    ULONG CountCharsY;
+    ULONG FillAttribute;
+
+    ULONG WindowFlags;
+    ULONG ShowWindowFlags;
+    UNICODE_STRING WindowTitle;
+    UNICODE_STRING DesktopInfo;
+    UNICODE_STRING ShellInfo;
+    UNICODE_STRING RuntimeData;
+    RTL_DRIVE_LETTER_CURDIR CurrentDirectories[RTL_MAX_DRIVE_LETTERS];
+
+    ULONG_PTR EnvironmentSize;
+    ULONG_PTR EnvironmentVersion;
+
+    PVOID PackageDependencyData;
+    ULONG ProcessGroupId;
+    ULONG LoaderThreads;
+
+    UNICODE_STRING RedirectionDllName; // REDSTONE4
+    UNICODE_STRING HeapPartitionName; // 19H1
+    ULONG_PTR DefaultThreadpoolCpuSetMasks;
+    ULONG DefaultThreadpoolCpuSetMaskCount;
+} RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
+
+
+
 typedef struct _UNICODE_STRING
 {
     USHORT Length;
@@ -60,6 +187,33 @@ typedef struct _OBJECT_ATTRIBUTES
 } OBJECT_ATTRIBUTES, *POBJECT_ATTRIBUTES;
 
 //define the different functions
+#define InitializeObjectAttributes(p, n, a, r, s) { \
+(p)->Length = sizeof(OBJECT_ATTRIBUTES); \
+(p)->RootDirectory = r; \
+(p)->Attributes = a; \
+(p)->ObjectName = n; \
+(p)->SecurityDescriptor = s; \
+(p)->SecurityQualityOfService = NULL; \
+}
+
+typedef NTSTATUS(NTAPI *NtCreateUserProcess)(
+
+_Out_ PHANDLE ProcessHandle,
+_Out_ PHANDLE ThreadHandle,
+_In_ ACCESS_MASK ProcessDesiredAccess,
+_In_ ACCESS_MASK ThreadDesiredAccess,
+_In_opt_ PCOBJECT_ATTRIBUTES ProcessObjectAttributes,
+_In_opt_ PCOBJECT_ATTRIBUTES ThreadObjectAttributes,
+_In_ ULONG ProcessFlags, // PROCESS_CREATE_FLAGS_*
+_In_ ULONG ThreadFlags, // THREAD_CREATE_FLAGS_*
+_In_opt_ PRTL_USER_PROCESS_PARAMETERS ProcessParameters,
+_Inout_ PPS_CREATE_INFO CreateInfo,
+_In_opt_ PPS_ATTRIBUTE_LIST AttributeList
+
+
+);
+
+
 
 
 typedef NTSTATUS(NTAPI *NtGetNextProcess)(
@@ -146,6 +300,30 @@ typedef NTSTATUS(NTAPI *NtCreateFile)(
 
 
 );
+
+
+
+typedef NTSTATUS(NTAPI *RtlCreateProcessParametersEx) (
+    _Out_ PRTL_USER_PROCESS_PARAMETERS* pProcessParameters,
+     _In_ PUNICODE_STRING ImagePathName,
+     _In_opt_ PUNICODE_STRING DllPath,
+     _In_opt_ PUNICODE_STRING CurrentDirectory,
+     _In_opt_ PUNICODE_STRING CommandLine,
+     _In_opt_ PVOID Environment,
+     _In_opt_ PUNICODE_STRING WindowTitle,
+     _In_opt_ PUNICODE_STRING DesktopInfo,
+     _In_opt_ PUNICODE_STRING ShellInfo,
+     _In_opt_ PUNICODE_STRING RuntimeData,
+     _In_ ULONG Flags
+
+);
+
+VOID NTAPIRtlInitUnicodeString(
+    _Out_ PUNICODE_STRING DestinationString,
+    _In_opt_ PWSTR SourceString
+);
+
+
 typedef NTSTATUS(NTAPI *NtOpenProcess)(
 _Out_ PHANDLE ProcessHandle,
 _In_ ACCESS_MASK DesiredAccess,
